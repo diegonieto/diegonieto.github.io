@@ -3,7 +3,9 @@ The aim of this file is to learn Rust by comparing its functionaly with C++ by e
 
 ## C++ VS Rust
 
-### ASYNC/TASK
+### ASYNC
+
+#### Tasks
 
 [C++](c++/async.cpp) `std::async`.
 ```c++
@@ -75,3 +77,70 @@ fn main() {
     let handle = thread::spawn(|| do_something());
 }
 ```
+
+#### Barrier
+
+In C++ we can implement barriers with `shared_future` or `std::barrier` in C++ 20.
+[C++](c++/shared_future.cpp) `std::shared_future` work in a similar way as `std::future`, but
+letting several threads to wait for the same result:
+```c++
+    std::promise<void> readyPromise;
+    std::shared_future<void> barrier(readyPromise.get_future());
+
+    std::future<int> future1 = std::async(std::launch::async, [barrier](){
+        barrier.wait();
+        return 1;
+    });
+
+    std::future<int> future2 = std::async(std::launch::async, [barrier](){
+        barrier.wait();
+        return 2;
+    });
+
+    // Do stuff
+    readyPromise.set_value();
+```
+
+The [C++](c++/barriercpp20.cpp) `std::barrier` version is easier to implement:
+```c++
+    const auto workers = {"Anil", "Busara", "Carl"};
+
+    auto on_completion = []() noexcept
+    {
+        static auto phase = "Cleaning up...\n";
+    };
+
+    std::barrier sync_point(std::ssize(workers), on_completion);
+    auto work = [&](std::string name)
+    {
+        std::string product = "  " + name + " worked\n";
+        std::osyncstream(std::cout) << product;  // ok, op<< call is atomic
+        sync_point.arrive_and_wait();
+    };
+
+    std::vector<std::jthread> threads;
+    threads.reserve(std::size(workers));
+    for (auto const& worker : workers)
+        threads.emplace_back(work, worker);
+```
+
+The third [C++](c++/barrier.cpp) uses `std::condition_variable` to implement that. However this complicates the code.
+That version is comparable to the Rust condition variable version.
+
+The [Rust](rust/src/bin/barrier_tokio.rs) `Tokio` is comparable to the `std::barrier` in C++:
+```rust
+    let barrier = Arc::new(Barrier::new(NUM_THREADS));
+
+    let mut handles = vec![];
+
+    for _ in 0..NUM_THREADS {
+        let barrier = Arc::clone(&barrier);
+        let handle = tokio::spawn(async move {
+            println!("Task before barrier");
+            barrier.wait().await;
+            println!("Task after barrier");
+        });
+        handles.push(handle);
+    }
+```
+
