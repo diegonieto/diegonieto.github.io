@@ -144,3 +144,35 @@ The [Rust](rust/src/bin/barrier_tokio.rs) `Tokio` is comparable to the `std::bar
     }
 ```
 
+The [Rust](rust/src/bin/barrier_std.rs) std barrier is also an easy implementation:
+```rust
+    let n = 5;
+    let mut handles = Vec::with_capacity(n);
+    let barrier = Arc::new(Barrier::new(n));
+    for i in 0..n {
+        let c = Arc::clone(&barrier);
+        handles.push(thread::spawn(move || {
+            println!("before wait thread {}", i);
+            c.wait();
+            println!("after wait thread {}", i);
+        }));
+    }
+```
+
+The [Rust](rust/src/bin/barrier_condvar.rs) condition variable requires a lot more code. This would be wait function:
+```rust
+    let (lock, cvar) = &*counter;
+
+    println!("Thread {} is doing work before waiting.", i);
+
+    let mut num = lock.lock().unwrap();
+    *num -= 1;
+    if *num == 0 {
+        println!("Last thread!");
+        cvar.notify_all();
+    } else {
+        let _unused = cvar.wait(num).unwrap();
+    }
+
+    println!("Thread {} is proceeding after being notified.", i);
+```
