@@ -126,6 +126,20 @@ The [C++](c++/barriercpp20.cpp) `std::barrier` version is easier to implement:
 
 The third [C++](c++/barrier.cpp) uses `std::condition_variable` to implement that. However this complicates the code.
 That version is comparable to the Rust condition variable version.
+```c++
+    std::unique_lock<std::mutex> lk(_mutex);
+    _remainingThreads--;
+    if (_remainingThreads > 0)
+    {
+        std::cout << "Before work thread " << std::this_thread::get_id() << std::endl;
+        cv.wait(lk);
+        _remainingThreads = _initialThreads;
+    }
+    else
+    {
+        cv.notify_all();
+    }
+```
 
 The [Rust](rust/src/bin/barrier_tokio.rs) `Tokio` is comparable to the `std::barrier` in C++:
 ```rust
@@ -176,3 +190,40 @@ The [Rust](rust/src/bin/barrier_condvar.rs) condition variable requires a lot mo
 
     println!("Thread {} is proceeding after being notified.", i);
 ```
+
+#### Producer-consumer
+The [C++](c++/producer-consumer.cpp) producer-consumer demonstrates how in C++ we can implement this
+schema by using `std::condition_varible`.
+```c++
+    // Wait if we did not reach the max size (false)
+    full.wait(lk, [&size]{
+        return size <= maxSize;
+    });
+    ...
+    // Wait if size is equal or less to zero (false)
+    empty.wait(lk, [&size]{
+        return size > 0;
+    });
+```
+
+The [Rust] producer-consumer is quite easier. Using `async::mpsc` or `async::mpmc` we can use our implementations
+on the top of this schema. We can just use channel to wrap our struct and the use `tx` to send the our object from another
+thread. We can also set a maximum number of objects to send, then it will work as a producer consumer schema.
+```rust
+    let (tx, rx) = channel();
+    for i in 0..10 {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            tx.send(i).unwrap();
+        });
+    }
+
+    for _ in 0..10 {
+        let j = rx.recv().unwrap();
+        assert!(0 <= j && j < 10);
+    }
+```
+
+#### References
+* [C++ Async](https://en.cppreference.com/w/cpp/thread)
+* [Rust Async](https://doc.rust-lang.org/std/sync/)
